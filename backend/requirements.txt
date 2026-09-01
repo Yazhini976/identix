@@ -4,7 +4,9 @@ python-multipart==0.0.9
 aiofiles==23.2.1
 Pillow==10.3.0
 numpy
-opencv-python
+opencv-python-headless
 psycopg2-binary
 cryptography
 PyJWT
+bcrypt
+python-dotenv

@@ -2,20 +2,34 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from contextlib import contextmanager
 import os
+from dotenv import load_dotenv
 
-# PostgreSQL Connection Configuration
-DB_CONFIG = {
-    "dbname": "identix",
-    "user": "postgres",
-    "password": "123",
-    "host": "localhost",
-    "port": "5432"
-}
+load_dotenv()
+
+# Support DATABASE_URL (provided by Render) or individual env vars (local dev)
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if DATABASE_URL:
+    # Render provides postgres:// but psycopg2 needs postgresql://
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    DB_CONFIG = None  # Will use DATABASE_URL directly
+else:
+    DB_CONFIG = {
+        "dbname": os.getenv("DB_NAME", "identix"),
+        "user": os.getenv("DB_USER", "postgres"),
+        "password": os.getenv("DB_PASSWORD", "123"),
+        "host": os.getenv("DB_HOST", "localhost"),
+        "port": os.getenv("DB_PORT", "5432")
+    }
+
 
 def get_connection():
     """Returns a PostgreSQL connection."""
     try:
-        conn = psycopg2.connect(**DB_CONFIG)
+        if DATABASE_URL:
+            conn = psycopg2.connect(DATABASE_URL)
+        else:
+            conn = psycopg2.connect(**DB_CONFIG)
         return conn
     except Exception as e:
         print(f"Error connecting to PostgreSQL: {e}")

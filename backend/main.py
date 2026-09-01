@@ -6,18 +6,24 @@ import cv2
 import jwt
 import logging
 import re
+import uuid
+import bcrypt
 from datetime import datetime, timedelta
 from fastapi import FastAPI, Form, File, UploadFile, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from typing import Optional, List
-import uuid
 from cryptography.fernet import Fernet
+from dotenv import load_dotenv
 
 from database import init_db, get_db
 from psycopg2.extras import RealDictCursor
 from deepfake import deepfake_check
+
+# Load environment variables
+load_dotenv()
 
 # --- LOGGING SETUP ---
 logging.basicConfig(
@@ -28,10 +34,17 @@ logging.basicConfig(
 logger = logging.getLogger("identix-security")
 
 # --- ENCRYPTION & JWT SETUP ---
-ENCRYPTION_KEY = Fernet.generate_key()
+FERNET_KEY_STR = os.getenv("FERNET_KEY")
+if not FERNET_KEY_STR:
+    logger.warning("FERNET_KEY not found in environment variables. Generating a temporary key.")
+    ENCRYPTION_KEY = Fernet.generate_key()
+else:
+    ENCRYPTION_KEY = FERNET_KEY_STR.encode()
+
 CIPHER_SUITE = Fernet(ENCRYPTION_KEY)
-JWT_SECRET_KEY = "identix_super_secret_key_change_me_in_prod" # In prod, use env var
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "identix_super_secret_key_change_me_in_prod")
 JWT_ALGORITHM = "HS256"
+
 
 # --- RATE LIMITING ---
 RATE_LIMIT_STORE = {} # {ip: [timestamps]}
@@ -57,9 +70,16 @@ async def rate_limit(request: Request):
 # ---------------------------------------------------------------------------
 app = FastAPI(title="Digital Identity System", version="1.0.0")
 
+ALLOWED_ORIGINS_ENV = os.getenv("ALLOWED_ORIGINS", "")
+ALLOWED_ORIGINS = (
+    [o.strip() for o in ALLOWED_ORIGINS_ENV.split(",") if o.strip()]
+    if ALLOWED_ORIGINS_ENV
+    else ["http://localhost:3000", "http://127.0.0.1:3000"]
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -93,6 +113,7 @@ class UserOut(BaseModel):
 class RegisterResponse(BaseModel):
     id: str
     message: str
+    token: Optional[str] = None
 
 class LoginRequest(BaseModel):
     email: str
@@ -102,6 +123,8 @@ class LoginResponse(BaseModel):
     user_id: str
     message: str
     name: str
+    token: Optional[str] = None
+
 
 class LivenessSignals(BaseModel):
     face: bool
@@ -149,6 +172,33 @@ def _save_file(upload: UploadFile, dest_dir: str, filename: str) -> str:
     with open(dest, "wb") as f:
         shutil.copyfileobj(upload.file, f)
     return dest
+
+
+security = HTTPBearer()
+
+
+def create_session_token(user_id: str) -> str:
+    expiry = datetime.utcnow() + timedelta(hours=2)
+    payload = {
+        "user_id": user_id,
+        "type": "session",
+        "exp": expiry
+    }
+    return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        if payload.get("type") != "session":
+            raise HTTPException(status_code=401, detail="Invalid token type.")
+        return payload["user_id"]
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Session expired.")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid session token.")
+
 
 
 def _detect_screen_edges(frame) -> bool:
@@ -410,8 +460,9 @@ async def register(
     dob: str = Form(...),
     address: str = Form(...),
 ):
-    """Register a new user and return their generated ID."""
+    """Register a new user and return their generated ID and a session token."""
     user_id = str(uuid.uuid4())[:8]
+    hashed_password = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
     with get_db() as conn:
         with conn.cursor() as cursor:
             # Check if email already exists
@@ -424,38 +475,46 @@ async def register(
                 INSERT INTO users (id, name, age, email, password, phone, dob, address) 
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
-                (user_id, name, age, email, password, phone, dob, address),
+                (user_id, name, age, email, hashed_password, phone, dob, address),
             )
         conn.commit()
-    return RegisterResponse(id=user_id, message=f"User {name} registered successfully.")
+    token = create_session_token(user_id)
+    return RegisterResponse(id=user_id, message=f"User {name} registered successfully.", token=token)
 
 
 @app.post("/login", response_model=LoginResponse, dependencies=[Depends(rate_limit)])
 async def login(req: LoginRequest):
-    """Authenticate a user and return their ID and name."""
+    """Authenticate a user and return their ID, name, and a session token."""
     with get_db() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute(
-                "SELECT id, name FROM users WHERE email = %s AND password = %s",
-                (req.email, req.password),
+                "SELECT id, name, password FROM users WHERE email = %s",
+                (req.email,),
             )
             user = cursor.fetchone()
-            if not user:
+            if not user or not user["password"]:
                 raise HTTPException(status_code=401, detail="Invalid email or password.")
             
+            if not bcrypt.checkpw(req.password.encode("utf-8"), user["password"].encode("utf-8")):
+                raise HTTPException(status_code=401, detail="Invalid email or password.")
+            
+    token = create_session_token(user["id"])
     return LoginResponse(
         user_id=user["id"],
         message="Login successful",
-        name=user["name"]
+        name=user["name"],
+        token=token
     )
 
 
 @app.post("/upload-face/{user_id}", dependencies=[Depends(rate_limit)])
-async def upload_face(user_id: str, file: UploadFile = File(...)):
+async def upload_face(user_id: str, file: UploadFile = File(...), current_user_id: str = Depends(get_current_user)):
     """Upload a face image for the given user."""
     # Alphanumeric validation
     if not re.match(r"^[a-zA-Z0-9\-]+$", user_id):
         raise HTTPException(status_code=400, detail="Invalid user_id format.")
+    if user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Access denied. You can only upload files for your own profile.")
     with get_db() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
@@ -471,11 +530,13 @@ async def upload_face(user_id: str, file: UploadFile = File(...)):
 
 
 @app.post("/upload-id/{user_id}", dependencies=[Depends(rate_limit)])
-async def upload_id(user_id: str, file: UploadFile = File(...)):
+async def upload_id(user_id: str, file: UploadFile = File(...), current_user_id: str = Depends(get_current_user)):
     """Upload an ID document for the given user."""
     # Alphanumeric validation
     if not re.match(r"^[a-zA-Z0-9\-]+$", user_id):
         raise HTTPException(status_code=400, detail="Invalid user_id format.")
+    if user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Access denied. You can only upload files for your own profile.")
     with get_db() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
@@ -497,6 +558,7 @@ async def upload_id(user_id: str, file: UploadFile = File(...)):
 async def liveness_check(
     user_id: str = Form(...),
     video: UploadFile = File(...),
+    current_user_id: str = Depends(get_current_user)
 ):
     """
     Analyse a captured webcam video for multi-signal liveness.
@@ -506,6 +568,9 @@ async def liveness_check(
     if not re.match(r"^[a-zA-Z0-9\-]+$", user_id):
         logger.warning(f"Security Alert: Malformed user_id in liveness-check: {user_id}")
         raise HTTPException(status_code=400, detail="Invalid user_id format.")
+
+    if user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Access denied. You can only perform liveness check for your own profile.")
 
     # 0. Initialize variables
     is_live = False
@@ -654,10 +719,12 @@ async def liveness_check(
 
 
 @app.get("/user/{user_id}", response_model=UserOut, dependencies=[Depends(rate_limit)])
-async def get_user(user_id: str):
+async def get_user(user_id: str, current_user_id: str = Depends(get_current_user)):
     # Alphanumeric validation
     if not re.match(r"^[a-zA-Z0-9\-]+$", user_id):
         raise HTTPException(status_code=400, detail="Invalid user_id format.")
+    if user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Access denied. You can only view your own profile.")
     with get_db() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
@@ -685,8 +752,10 @@ async def deepfake_check_endpoint():
 # ---------------------------------------------------------------------------
 
 @app.post("/generate-share-token", response_model=ShareTokenResponse, dependencies=[Depends(rate_limit)])
-async def generate_share_token(req: ShareTokenRequest):
+async def generate_share_token(req: ShareTokenRequest, current_user_id: str = Depends(get_current_user)):
     """Generate a secure signed JWT for selective identity sharing."""
+    if req.user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Access denied. You can only generate sharing tokens for your own profile.")
     with get_db() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cursor:
             # Check if user exists AND is verified (ENFORCEMENT)

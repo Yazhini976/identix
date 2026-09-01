@@ -1,36 +1,13 @@
 import Head from 'next/head';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
+import { getToken } from '../lib/auth';
+import StepBar from '../components/StepBar';
+import Wordmark from '../components/Wordmark';
 
-const API = 'http://localhost:8000';
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-function StepBar({ current }) {
-  const steps = ['Sign Up', 'Capture', 'Liveness', 'Dashboard'];
-  return (
-    <div className="steps">
-      {steps.map((label, i) => {
-        const n = i + 1;
-        const isDone = n < current;
-        const isActive = n === current;
-        return (
-          <div key={n} style={{ display: 'flex', alignItems: 'center' }}>
-            <div className={`step ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}`}>
-              <div className="step-dot">
-                {isDone ? (
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                ) : n}
-              </div>
-              <span className="step-label">{label}</span>
-            </div>
-            {i < steps.length - 1 && <div className="step-line" />}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+
 
 export default function WebcamPage() {
   const router = useRouter();
@@ -120,7 +97,12 @@ export default function WebcamPage() {
       const form = new FormData();
       form.append('file', file);
 
-      const uploadRes = await fetch(`${API}/upload-face/${userId}`, { method: 'POST', body: form });
+      const token = getToken();
+      const uploadRes = await fetch(`${API}/upload-face/${userId}`, { 
+        method: 'POST', 
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: form 
+      });
       if (!uploadRes.ok) {
         const data = await uploadRes.json().catch(() => ({}));
         throw new Error(data.detail || 'Upload failed. Please try again.');
@@ -141,15 +123,7 @@ export default function WebcamPage() {
 
       <main className="page">
         <div className="card">
-          {/* Wordmark */}
-          <div className="wordmark">
-            <div className="wordmark-icon">
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <path d="M10 2L3 6v4c0 3.9 2.9 7.5 7 8.5 4.1-1 7-4.6 7-8.5V6L10 2z" fill="white" fillOpacity="0.9" />
-              </svg>
-            </div>
-            <span className="wordmark-text">IDentix</span>
-          </div>
+          <Wordmark />
 
           <StepBar current={2} />
 

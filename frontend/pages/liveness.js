@@ -1,70 +1,46 @@
 import Head from 'next/head';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
+import { getToken } from '../lib/auth';
+import StepBar from '../components/StepBar';
+import Wordmark from '../components/Wordmark';
 
-const API = 'http://localhost:8000';
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-/* ── Step bar ── */
-function StepBar({ current }) {
-  const steps = ['Sign Up', 'Capture', 'Liveness', 'Dashboard'];
-  return (
-    <div className="steps" style={{ marginBottom: 28 }}>
-      {steps.map((label, i) => {
-        const n = i + 1;
-        const isDone    = n < current;
-        const isActive  = n === current;
-        return (
-          <div key={n} style={{ display: 'flex', alignItems: 'center' }}>
-            <div className={`step ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}`}>
-              <div className="step-dot">
-                {isDone ? (
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                ) : n}
-              </div>
-              <span className="step-label">{label}</span>
-            </div>
-            {i < steps.length - 1 && <div className="step-line" style={{ width: 40 }} />}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+
 
 /* ── Trust Engine Panel ── */
 function TrustEnginePanel({ result }) {
   if (!result || !result.signals) return null;
   const { signals, risk, trust_score, confidence } = result;
   const isPass = result.liveness;
-  
+
   return (
     <div className="trust-engine-panel">
       <div className="trust-engine-title">
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <path d="M9 1v16M1 9h16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-          <circle cx="9" cy="9" r="4" stroke="currentColor" strokeWidth="1.5"/>
+          <path d="M9 1v16M1 9h16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <circle cx="9" cy="9" r="4" stroke="currentColor" strokeWidth="1.5" />
         </svg>
         Trust Engine Analysis (Security-first)
       </div>
-      
+
       <div className="trust-engine-title" style={{ marginTop: 16 }}>
         Required Signals
       </div>
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-        Status: {Object.values(signals).filter(v=>v).length}/4 Verified
+        Status: {Object.values(signals).filter(v => v).length}/4 Verified
       </div>
 
       {result.is_simulation && (
         <div style={{ marginBottom: 16, padding: '6px 12px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: 6, fontSize: 11, color: '#3b82f6', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
           SIMULATION ACTIVE
         </div>
       )}
-      
+
       {/* Multi-layer Indicator */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
@@ -120,7 +96,7 @@ function TrustEnginePanel({ result }) {
           </span>
         </div>
       </div>
-      
+
       <div className="trust-score-row">
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>TRUST SCORE</span>
@@ -139,7 +115,7 @@ function TrustEnginePanel({ result }) {
 function ExplainPanel({ result }) {
   if (!result || !result.signals) return null;
   const isPass = result.liveness;
-  
+
   return (
     <div className="explain-panel">
       <div className="explain-title">{isPass ? 'Why Verified?' : 'Why Flagged?'}</div>
@@ -167,7 +143,7 @@ function ExplainPanel({ result }) {
 /* ── Animated result overlay ── */
 function ResultOverlay({ result }) {
   const [animConfidence, setAnimConfidence] = useState(85);
-  
+
   useEffect(() => {
     if (!result) return;
     if (result.liveness) {
@@ -190,7 +166,7 @@ function ResultOverlay({ result }) {
 
   if (!result) return null;
   const isPass = result.liveness;
-  
+
   // Parse Reason
   let spoofType = "Security Violation";
   if (result.reason) {
@@ -205,20 +181,20 @@ function ResultOverlay({ result }) {
       <div className="result-icon-wrap">
         {isPass ? (
           <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-            <circle cx="18" cy="18" r="17" stroke="currentColor" strokeWidth="2" fill="none"/>
-            <path d="M10 18l6 6 10-12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+            <circle cx="18" cy="18" r="17" stroke="currentColor" strokeWidth="2" fill="none" />
+            <path d="M10 18l6 6 10-12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         ) : (
           <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-            <circle cx="18" cy="18" r="17" stroke="currentColor" strokeWidth="2" fill="none"/>
-            <path d="M12 12l12 12M24 12L12 24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+            <circle cx="18" cy="18" r="17" stroke="currentColor" strokeWidth="2" fill="none" />
+            <path d="M12 12l12 12M24 12L12 24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
           </svg>
         )}
       </div>
       <div className="result-title">
         {isPass ? 'Security Check Passed ✅' : result.is_simulation ? 'Simulation Result processed 🛠️' : 'Spoof Attack Blocked ❌'}
       </div>
-      
+
       {!isPass && (
         <div style={{ background: 'rgba(0,0,0,0.03)', padding: '6px 12px', borderRadius: 50, fontSize: 12, marginTop: 8, fontWeight: 600, border: '1px solid rgba(0,0,0,0.05)' }}>
           {result.is_simulation ? 'Test Scenario: ' : 'Blocked Attack: '}
@@ -270,26 +246,26 @@ export default function LivenessPage() {
   const router = useRouter();
   const { id: userId } = router.query;
 
-  const videoRef    = useRef(null);
-  const canvasRef   = useRef(null);
-  const streamRef   = useRef(null);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
 
-  const [phase, setPhase]         = useState('idle');   // idle | camera | captured | detecting | done
+  const [phase, setPhase] = useState('idle');   // idle | camera | captured | detecting | done
   const [cameraError, setCameraError] = useState('');
-  const [snapshot, setSnapshot]   = useState(null);     // data URL (fallback/thumbnail) or Blob URL
+  const [snapshot, setSnapshot] = useState(null);     // data URL (fallback/thumbnail) or Blob URL
   const [videoBlob, setVideoBlob] = useState(null);     // actual video data
   const [isRecording, setIsRecording] = useState(false);
   const [countdown, setCountdown] = useState(0);
-  const [result, setResult]       = useState(null);     // LivenessResponse
-  const [mounted, setMounted]     = useState(false);
-  const [blink, setBlink]         = useState(false);    // instruction pulse
-  
+  const [result, setResult] = useState(null);     // LivenessResponse
+  const [mounted, setMounted] = useState(false);
+  const [blink, setBlink] = useState(false);    // instruction pulse
+
   // Multi-signal Engine State
   const [fraudMode, setFraudMode] = useState({ active: false, noBlink: false, staticFrame: false, noMovement: false });
   const [statusMsg, setStatusMsg] = useState('');
-  const [progress, setProgress]   = useState(0);
+  const [progress, setProgress] = useState(0);
   const [liveSignals, setLiveSignals] = useState({ face: false, blink: false, movement: false, frame: false });
 
   useEffect(() => { setMounted(true); }, []);
@@ -340,16 +316,16 @@ export default function LivenessPage() {
   /* ── capture (video) ── */
   const handleCapture = () => {
     if (!streamRef.current) return;
-    
+
     chunksRef.current = [];
-    
+
     // Check for supported mime types (WebM for Chrome/Firefox, MP4 for Safari)
-    const mimeType = MediaRecorder.isTypeSupported('video/webm') 
-      ? 'video/webm' 
+    const mimeType = MediaRecorder.isTypeSupported('video/webm')
+      ? 'video/webm'
       : 'video/mp4';
-      
+
     console.log("Using mimeType for recording:", mimeType);
-    
+
     let recorder;
     try {
       recorder = new MediaRecorder(streamRef.current, { mimeType });
@@ -404,7 +380,7 @@ export default function LivenessPage() {
   const handleVerify = async () => {
     // Ensure userId is present (handle router lag)
     const finalUserId = userId || router.query.id;
-    
+
     if (!videoBlob) {
       alert("No video recorded. Please capture your biometrics first.");
       return;
@@ -413,7 +389,7 @@ export default function LivenessPage() {
       alert("Session expired or User ID missing. Please go back to the signup page.");
       return;
     }
-    
+
     setPhase('detecting');
     setProgress(0);
     setLiveSignals({ face: false, blink: false, movement: false, frame: false });
@@ -429,7 +405,7 @@ export default function LivenessPage() {
 
       setStatusMsg('Extracting eye-blink frequency...');
       await sleep(1000);
-      const blinkPass = fraudMode.active && fraudMode.noBlink ? false : true; 
+      const blinkPass = fraudMode.active && fraudMode.noBlink ? false : true;
       setLiveSignals(s => ({ ...s, blink: blinkPass }));
       setProgress(40);
 
@@ -444,7 +420,7 @@ export default function LivenessPage() {
       const framePass = fraudMode.active && fraudMode.staticFrame ? false : true;
       setLiveSignals(s => ({ ...s, frame: framePass }));
       setProgress(90);
-      
+
       setStatusMsg('Finalizing Multi-Signal Trust Score...');
       await sleep(500);
       setProgress(100);
@@ -453,7 +429,7 @@ export default function LivenessPage() {
       // Detect correct extension and MIME type
       const extension = videoBlob.type.includes('mp4') ? '.mp4' : '.webm';
       const file = new File([videoBlob], `liveness_capture${extension}`, { type: videoBlob.type || 'video/webm' });
-      
+
       const form = new FormData();
       form.append('user_id', finalUserId);
       form.append('video', file);
@@ -468,21 +444,26 @@ export default function LivenessPage() {
         frame: framePass
       });
 
-      const res  = await fetch(`${API}/liveness-check`, { method: 'POST', body: form });
+      const token = getToken();
+      const res = await fetch(`${API}/liveness-check`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: form
+      });
       const data = await res.json();
       if (!res.ok) {
         console.error("Backend validation failed:", data);
         const errMsg = data.detail || 'Liveness check failed.';
         const isSim = errMsg.includes('Simulation:');
-        setResult({ 
-          liveness: false, 
-          confidence: 0, 
-          message: errMsg, 
+        setResult({
+          liveness: false,
+          confidence: 0,
+          message: errMsg,
           reason: errMsg,
           risk: 'HIGH',
           trust_score: 0,
           is_simulation: isSim,
-          signals: { face: false, blink: false, movement: false, frame: false } 
+          signals: { face: false, blink: false, movement: false, frame: false }
         });
         setPhase('done');
         return;
@@ -493,14 +474,14 @@ export default function LivenessPage() {
       setPhase('done');
     } catch (err) {
       console.error("Verification error:", err);
-      setResult({ 
-        liveness: false, 
-        confidence: 0, 
-        message: err.message, 
+      setResult({
+        liveness: false,
+        confidence: 0,
+        message: err.message,
         reason: err.message,
         risk: 'HIGH',
         trust_score: 0,
-        signals: { face: false, blink: false, movement: false, frame: false } 
+        signals: { face: false, blink: false, movement: false, frame: false }
       });
       setPhase('done');
     }
@@ -524,15 +505,7 @@ export default function LivenessPage() {
       <main className="page">
         <div className={`card ${mounted ? 'fade-in' : ''}`} style={{ maxWidth: 500 }}>
 
-          {/* Wordmark */}
-          <div className="wordmark">
-            <div className="wordmark-icon">
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <path d="M10 2L3 6v4c0 3.9 2.9 7.5 7 8.5 4.1-1 7-4.6 7-8.5V6L10 2z" fill="white" fillOpacity="0.9"/>
-              </svg>
-            </div>
-            <span className="wordmark-text">IDentix</span>
-          </div>
+          <Wordmark />
 
           <StepBar current={3} />
 
@@ -544,7 +517,7 @@ export default function LivenessPage() {
           {/* ── Fraud Simulation Toggle ── */}
           {(phase === 'idle' || phase === 'camera' || phase === 'captured') && (
             <div className={`fraud-toggle-container ${fraudMode.active ? 'fraud-active' : ''}`} style={{ marginBottom: 16 }}>
-              <div 
+              <div
                 className="fraud-toggle-wrap"
                 onClick={() => setFraudMode(f => {
                   const newActive = !f.active;
@@ -564,7 +537,7 @@ export default function LivenessPage() {
                 </div>
                 <div className="toggle-switch" />
               </div>
-              
+
               {fraudMode.active && (
                 <div className="fraud-options" style={{ padding: '12px 16px', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid var(--error)', borderTop: 'none', borderBottomLeftRadius: 'var(--radius-sm)', borderBottomRightRadius: 'var(--radius-sm)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: 'var(--text)' }}>
@@ -589,14 +562,14 @@ export default function LivenessPage() {
             <div className="liveness-start-wrap">
               <div className="liveness-hero-icon">
                 <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-                  <circle cx="24" cy="24" r="22" stroke="var(--accent)" strokeWidth="2" strokeDasharray="4 3"/>
-                  <path d="M16 24l6 6 10-10" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <circle cx="24" cy="24" r="22" stroke="var(--accent)" strokeWidth="2" strokeDasharray="4 3" />
+                  <path d="M16 24l6 6 10-10" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
               <p className="liveness-hint">
                 Position your face in the frame and follow the on-screen prompts for behavioral verification.
               </p>
-              
+
               <div style={{ background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: 12, padding: 16, marginBottom: 24, textAlign: 'left' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: 'var(--accent)' }}>Tips for Successful Verification:</div>
                 <ul style={{ fontSize: 12, color: 'var(--text-muted)', paddingLeft: 18, lineHeight: 1.6 }}>
@@ -623,15 +596,15 @@ export default function LivenessPage() {
 
               {/* Face guide overlay */}
               <div className="video-frame liveness-frame">
-                <video ref={videoRef} playsInline muted style={{ transform: 'scaleX(-1)' }}/>
+                <video ref={videoRef} playsInline muted style={{ transform: 'scaleX(-1)' }} />
                 <div className={`face-alignment-box ${isRecording ? 'detected' : ''}`} />
-                <div className={isRecording ? 'recording-dot' : ''}/>
+                <div className={isRecording ? 'recording-dot' : ''} />
               </div>
 
-              <canvas ref={canvasRef} style={{ display: 'none' }}/>
+              <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-              <button 
-                className={`btn btn-capture ${isRecording ? 'recording' : ''}`} 
+              <button
+                className={`btn btn-capture ${isRecording ? 'recording' : ''}`}
                 onClick={handleCapture}
                 disabled={isRecording}
               >
@@ -644,16 +617,16 @@ export default function LivenessPage() {
           {phase === 'captured' && (
             <div className="webcam-container">
               <div className="snapshot-preview">
-                <video 
-                  src={snapshot} 
-                  autoPlay 
-                  loop 
-                  muted 
-                  playsInline 
+                <video
+                  src={snapshot}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
                   style={{ transform: 'scaleX(-1)', width: '100%', display: 'block' }}
                 />
               </div>
-              
+
               <div style={{ display: 'flex', gap: 12, width: '100%' }}>
                 <button className="btn btn-ghost" onClick={handleRetake}>Retake</button>
                 <button className="btn btn-primary" onClick={handleVerify}>Verify Identity</button>
@@ -668,7 +641,7 @@ export default function LivenessPage() {
               <div className="status-progress-bar">
                 <div className="status-progress-fill" style={{ width: `${progress}%` }} />
               </div>
-              
+
               <div className="signals-grid" style={{ marginTop: 24 }}>
                 <div className="signal-item">
                   <span>Face</span>
@@ -702,21 +675,21 @@ export default function LivenessPage() {
           {phase === 'done' && result && (
             <div className="webcam-container" style={{ gap: 16 }}>
               <ResultOverlay result={result} />
-              
+
               <TrustEnginePanel result={result} />
               <ExplainPanel result={result} />
 
               <div style={{ background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: 12, borderRadius: 8 }}>
                 <div style={{ fontSize: 12, color: 'var(--success)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path d="M3 7l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M3 7l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                   Verification Record Secured
                 </div>
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace', wordBreak: 'break-all', lineHeight: 1.5 }}>
-                  UID: {userId}<br/>
-                  Time: {new Date().toISOString()}<br/>
-                  Score: {result.trust_score}%<br/>
+                  UID: {userId}<br />
+                  Time: {new Date().toISOString()}<br />
+                  Score: {result.trust_score}%<br />
                   Hash: {result.record_hash || 'pending...'}
                 </div>
               </div>

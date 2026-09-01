@@ -1,8 +1,10 @@
 import Head from 'next/head';
 import { useState } from 'react';
 import { useRouter } from 'next/router';
+import { setToken, setUserId } from '../lib/auth';
+import Wordmark from '../components/Wordmark';
 
-const API = 'http://localhost:8000';
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -32,7 +34,8 @@ export default function LoginPage() {
       }
 
       const data = await res.json();
-      // In a real app, we'd store a token. Here we just redirect to dashboard with user_id.
+      setToken(data.token);
+      setUserId(data.user_id);
       router.push(`/dashboard?id=${data.user_id}`);
     } catch (err) {
       setError(err.message);
@@ -49,14 +52,7 @@ export default function LoginPage() {
 
       <main className="page">
         <div className="card">
-          <div className="wordmark">
-            <div className="wordmark-icon">
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <path d="M10 2L3 6v4c0 3.9 2.9 7.5 7 8.5 4.1-1 7-4.6 7-8.5V6L10 2z" fill="white" fillOpacity="0.9" />
-              </svg>
-            </div>
-            <span className="wordmark-text">IDentix</span>
-          </div>
+          <Wordmark />
 
           <h1 className="page-title">Welcome back</h1>
           <p className="page-subtitle">Sign in to manage your digital identity and verified documents.</p>

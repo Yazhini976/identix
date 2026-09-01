@@ -1,37 +1,13 @@
 import Head from 'next/head';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/router';
+import { getToken, clearToken } from '../lib/auth';
+import StepBar from '../components/StepBar';
+import Wordmark from '../components/Wordmark';
 
-const API = 'http://localhost:8000';
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-/* ─── Step bar ─── */
-function StepBar({ current }) {
-  const steps = ['Sign Up', 'Capture', 'Liveness', 'Dashboard'];
-  return (
-    <div className="steps">
-      {steps.map((label, i) => {
-        const n = i + 1;
-        const isDone = n < current;
-        const isActive = n === current;
-        return (
-          <div key={n} style={{ display: 'flex', alignItems: 'center' }}>
-            <div className={`step ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}`}>
-              <div className="step-dot">
-                {isDone ? (
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                ) : n}
-              </div>
-              <span className="step-label">{label}</span>
-            </div>
-            {i < steps.length - 1 && <div className="step-line" />}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+
 
 /* ─── Verification Status Badge ─── */
 function StatusBadge({ status }) {
@@ -402,9 +378,13 @@ function ShareModal({ onClose, userId }) {
     if (selectedFields.length === 0) return;
     setLoading(true);
     try {
+      const token = getToken();
       const res = await fetch(`${API}/generate-share-token`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           user_id: userId,
           fields: selectedFields
@@ -679,7 +659,14 @@ export default function DashboardPage() {
     if (!userId) return;
     (async () => {
       try {
-        const res = await fetch(`${API}/user/${userId}`);
+        const token = getToken();
+        if (!token) {
+          router.push('/login');
+          return;
+        }
+        const res = await fetch(`${API}/user/${userId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
         if (!res.ok) {
           const d = await res.json().catch(() => ({}));
           throw new Error(d.detail || 'Failed to load user data.');
@@ -697,17 +684,17 @@ export default function DashboardPage() {
     if (!user) return;
     try {
       await navigator.clipboard.writeText(user.id);
-    } catch {
-      const el = document.createElement('textarea');
-      el.value = user.id;
-      document.body.appendChild(el);
-      el.select();
-      document.execCommand('copy');
-      document.body.removeChild(el);
+    } catch (err) {
+      console.error('Failed to copy ID: ', err);
     }
     setToast(true);
     setTimeout(() => setToast(false), 2200);
   }, [user]);
+
+  const handleSignOut = () => {
+    clearToken();
+    router.push('/login');
+  };
 
   const initials = user
     ? user.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
@@ -726,16 +713,7 @@ export default function DashboardPage() {
       <main className="page">
         <div className={`card dashboard-card ${mounted ? 'fade-in' : ''}`}>
 
-          {/* Wordmark */}
-          <div className="wordmark">
-            <div className="wordmark-icon">
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <path d="M10 2L3 6v4c0 3.9 2.9 7.5 7 8.5 4.1-1 7-4.6 7-8.5V6L10 2z"
-                  fill="white" fillOpacity="0.9" />
-              </svg>
-            </div>
-            <span className="wordmark-text">IDentix</span>
-          </div>
+          <Wordmark />
 
           <StepBar current={3} />
 
@@ -909,6 +887,15 @@ export default function DashboardPage() {
                 style={{ marginTop: 10 }}
               >
                 ← Register another identity
+              </button>
+
+              <button
+                id="signout-btn"
+                className="btn btn-ghost"
+                onClick={handleSignOut}
+                style={{ marginTop: 10, color: 'var(--error)' }}
+              >
+                Sign Out
               </button>
             </>
           )}
